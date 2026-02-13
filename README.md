@@ -101,6 +101,75 @@ See `examples/openclaw.config.snippet.json5` for a full example.
 - `iota_dry_run_transfer`
 - `iota_execute_transfer`
 
+## How To Execute A Transfer
+
+After plugin install, run this flow in OpenClaw:
+
+1. Verify network and funds:
+   - `iota_active_env`
+   - `iota_get_balance` (`withCoins: true`)
+   - `iota_get_gas` (collect one or more coin object IDs for `inputCoins`)
+2. Prepare the transaction:
+   - Call `iota_prepare_transfer` with:
+     - `recipient`: target `0x...` address
+     - `amountNanos`: amount in smallest unit as numeric string
+     - `inputCoins`: coin object IDs from `iota_get_gas`
+     - optional `gasBudget`
+   - Save `draft.id` from the response.
+3. Approve the draft (if `requireApproval: true`):
+   - Call `iota_approve_transfer` with `draftId` and `approve: true`.
+4. Simulate before broadcast (recommended):
+   - Call `iota_dry_run_transfer` with `draftId`.
+5. Execute on-chain:
+   - Call `iota_execute_transfer` with `draftId`.
+   - Optional:
+     - `signerAddress` for local-keystore signing.
+     - `signature` for external-signature mode.
+
+### Example Tool Payloads
+
+```json
+{
+  "tool": "iota_prepare_transfer",
+  "params": {
+    "recipient": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "amountNanos": "1000000000",
+    "inputCoins": [
+      "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ],
+    "gasBudget": "2000000"
+  }
+}
+```
+
+```json
+{
+  "tool": "iota_approve_transfer",
+  "params": {
+    "draftId": "REPLACE_WITH_DRAFT_ID",
+    "approve": true
+  }
+}
+```
+
+```json
+{
+  "tool": "iota_dry_run_transfer",
+  "params": {
+    "draftId": "REPLACE_WITH_DRAFT_ID"
+  }
+}
+```
+
+```json
+{
+  "tool": "iota_execute_transfer",
+  "params": {
+    "draftId": "REPLACE_WITH_DRAFT_ID"
+  }
+}
+```
+
 ## Local Development
 
 ```bash
