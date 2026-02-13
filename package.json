@@ -1,0 +1,43 @@
+{
+  "name": "iota-claw-wallet",
+  "version": "0.1.0",
+  "description": "OpenClaw plugin for IOTA wallet operations with approval-gated transaction flow.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Moron1337/iota-claw-wallet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Moron1337/iota-claw-wallet/issues"
+  },
+  "homepage": "https://github.com/Moron1337/iota-claw-wallet#readme",
+  "keywords": [
+    "openclaw",
+    "iota",
+    "wallet",
+    "plugin"
+  ],
+  "type": "module",
+  "main": "index.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "postinstall": "node ./scripts/bootstrap-first-wallet.mjs"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

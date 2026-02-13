@@ -1,0 +1,55 @@
+{
+  "id": "openclaw-iota-wallet",
+  "name": "IOTA Wallet",
+  "description": "IOTA wallet tools for OpenClaw with approval-gated transaction flow.",
+  "version": "0.1.0",
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": { "type": "boolean" },
+      "cliPath": { "type": "string" },
+      "defaultNetwork": {
+        "type": "string",
+        "default": "mainnet",
+        "enum": ["mainnet", "testnet", "devnet", "localnet", "custom"]
+      },
+      "customRpcUrl": { "type": "string" },
+      "requireApproval": { "type": "boolean" },
+      "approvalTtlSeconds": { "type": "integer", "minimum": 60, "maximum": 86400 },
+      "maxTransferNanos": { "type": "string", "pattern": "^[0-9]+$" },
+      "recipientAllowlist": {
+        "type": "array",
+        "items": { "type": "string", "pattern": "^0x[a-fA-F0-9]{64}$" }
+      },
+      "commandTimeoutMs": { "type": "integer", "minimum": 1000, "maximum": 120000 },
+      "signer": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": { "type": "string", "enum": ["local-keystore", "external-signature", "kms"] },
+          "keystorePath": { "type": "string" },
+          "keyId": { "type": "string" },
+          "base64PublicKey": { "type": "string" },
+          "intent": { "type": "string" }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "cliPath": { "label": "IOTA CLI Path", "placeholder": "iota" },
+    "defaultNetwork": { "label": "Default Network" },
+    "customRpcUrl": { "label": "Custom RPC URL" },
+    "requireApproval": { "label": "Require Approval" },
+    "approvalTtlSeconds": { "label": "Approval TTL (seconds)", "advanced": true },
+    "maxTransferNanos": { "label": "Maximum Transfer (nanos)" },
+    "recipientAllowlist": { "label": "Recipient Allowlist" },
+    "commandTimeoutMs": { "label": "CLI Timeout (ms)", "advanced": true },
+    "signer.mode": { "label": "Signer Mode" },
+    "signer.keystorePath": { "label": "Keystore Path", "advanced": true, "sensitive": true },
+    "signer.keyId": { "label": "KMS Key ID", "advanced": true, "sensitive": true },
+    "signer.base64PublicKey": { "label": "KMS Base64 Public Key", "advanced": true, "sensitive": true },
+    "signer.intent": { "label": "KMS Intent", "advanced": true }
+  }
+}

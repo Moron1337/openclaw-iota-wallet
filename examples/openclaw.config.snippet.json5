@@ -1,0 +1,24 @@
+{
+  plugins: {
+    entries: {
+      "openclaw-iota-wallet": {
+        enabled: true,
+        config: {
+          enabled: true,
+          cliPath: "iota",
+          defaultNetwork: "mainnet",
+          requireApproval: true,
+          approvalTtlSeconds: 1800,
+          maxTransferNanos: "1000000000",
+          recipientAllowlist: [
+            "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          ],
+          commandTimeoutMs: 30000,
+          signer: {
+            mode: "local-keystore"
+          }
+        }
+      }
+    }
+  }
+}
