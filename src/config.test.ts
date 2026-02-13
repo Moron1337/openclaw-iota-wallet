@@ -37,4 +37,19 @@ describe("resolveIotaWalletConfig", () => {
     const cfg = resolveIotaWalletConfig({ customRpcUrl: "not-an-url" });
     expect(cfg.customRpcUrl).toBeUndefined();
   });
+
+  it("prefers IOTA_CLI_PATH from environment when cliPath is not provided", () => {
+    const original = process.env.IOTA_CLI_PATH;
+    process.env.IOTA_CLI_PATH = "/tmp/custom-iota";
+    try {
+      const cfg = resolveIotaWalletConfig({});
+      expect(cfg.cliPath).toBe("/tmp/custom-iota");
+    } finally {
+      if (original === undefined) {
+        delete process.env.IOTA_CLI_PATH;
+      } else {
+        process.env.IOTA_CLI_PATH = original;
+      }
+    }
+  });
 });

@@ -1,8 +1,13 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { IotaWalletConfig, IotaNetwork, SignerMode } from "./types.js";
+
+const DEFAULT_CLI_PATH = "iota";
 
 export const DEFAULT_CONFIG: IotaWalletConfig = {
   enabled: true,
-  cliPath: "iota",
+  cliPath: DEFAULT_CLI_PATH,
   defaultNetwork: "mainnet",
   requireApproval: true,
   approvalTtlSeconds: 1800,
@@ -59,9 +64,30 @@ function asOptionalUrl(value: unknown): string | undefined {
   }
 }
 
+function resolveDefaultCliPath(): string {
+  const envCliPath = typeof process.env.IOTA_CLI_PATH === "string" ? process.env.IOTA_CLI_PATH.trim() : "";
+  if (envCliPath) {
+    return envCliPath;
+  }
+
+  const home = homedir();
+  const candidates = [
+    join(home, ".local", "bin", "iota"),
+    join(home, ".openclaw", "bin", "iota"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return DEFAULT_CLI_PATH;
+}
+
 export function resolveIotaWalletConfig(raw: unknown): IotaWalletConfig {
   const cfg = asRecord(raw);
   const signer = asRecord(cfg.signer);
+  const defaultCliPath = resolveDefaultCliPath();
 
   const defaultNetworkRaw = asString(cfg.defaultNetwork, DEFAULT_CONFIG.defaultNetwork);
   const defaultNetwork = NETWORKS.has(defaultNetworkRaw as IotaNetwork)
@@ -85,7 +111,7 @@ export function resolveIotaWalletConfig(raw: unknown): IotaWalletConfig {
 
   return {
     enabled: asBoolean(cfg.enabled, DEFAULT_CONFIG.enabled),
-    cliPath: asString(cfg.cliPath, DEFAULT_CONFIG.cliPath),
+    cliPath: asString(cfg.cliPath, defaultCliPath),
     defaultNetwork,
     customRpcUrl,
     requireApproval: asBoolean(cfg.requireApproval, DEFAULT_CONFIG.requireApproval),

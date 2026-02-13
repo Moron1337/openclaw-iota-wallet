@@ -7,7 +7,7 @@ OpenClaw plugin for IOTA wallet operations with approval-gated transaction flow.
 Machine-to-machine wallet layer for the IOTA economy: autonomous bots can hold funds, pay each other, and execute smart contracts in real time.
 
 - Plugin id: `openclaw-iota-wallet`
-- Package: `iota-claw-wallet`
+- Package: `openclaw-iota-wallet`
 - Default network: `mainnet`
 
 ## Features
@@ -58,12 +58,16 @@ openclaw plugins doctor
 Install behavior:
 
 - `postinstall` checks for `iota` CLI.
+- If `iota` is missing, `postinstall` can auto-install it from official `iotaledger/iota` GitHub releases.
 - Active env is switched to `mainnet`.
 - If the keystore has no addresses, a first address is created automatically.
 
 Optional install env vars:
 
 - `IOTA_WALLET_BOOTSTRAP=0` to disable bootstrap.
+- `IOTA_WALLET_AUTO_INSTALL_CLI=0` to disable automatic IOTA CLI install.
+- `IOTA_CLI_VERSION=latest` to choose release version for auto-install (default is `latest`).
+- `IOTA_CLI_INSTALL_DIR=/path/bin` to choose install target for auto-install (default `~/.local/bin`).
 - `IOTA_CLI_PATH=/custom/path/iota` to use a custom CLI path.
 
 ## Example Plugin Config

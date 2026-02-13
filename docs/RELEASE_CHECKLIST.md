@@ -33,7 +33,10 @@ Use semantic versioning:
   - `openclaw plugins install <npm-spec>`
   - `openclaw plugins enable openclaw-iota-wallet`
   - `openclaw plugins doctor`
-  - Confirm postinstall wallet bootstrap behavior (`mainnet` env + first address creation when keystore is empty)
+  - Confirm postinstall behavior:
+    - auto-installs IOTA CLI when missing (unless disabled via `IOTA_WALLET_AUTO_INSTALL_CLI=0`)
+    - sets `mainnet` env
+    - creates first wallet address when keystore is empty
 
 ## Post-release
 
