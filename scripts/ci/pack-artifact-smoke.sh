@@ -36,6 +36,7 @@ for file in "${required_files[@]}"; do
   fi
 done
 
+# shellcheck disable=SC2016
 node -e '
 const fs = require("node:fs");
 const [pkgPath, pluginPath] = process.argv.slice(1);
