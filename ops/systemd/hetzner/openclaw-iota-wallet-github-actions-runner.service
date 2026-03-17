@@ -1,0 +1,28 @@
+[Unit]
+Description=openclaw-iota-wallet GitHub Actions Runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gha-runner
+Group=gha-runner
+WorkingDirectory=/home/gha-runner/actions-runner-openclaw-iota-wallet
+Environment=PATH=/home/gha-runner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/gha-runner/actions-runner-openclaw-iota-wallet/run.sh
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+LockPersonality=true
+UMask=077
+ReadWritePaths=/home/gha-runner /tmp
+
+[Install]
+WantedBy=multi-user.target

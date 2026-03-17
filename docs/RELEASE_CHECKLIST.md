@@ -19,6 +19,7 @@ Use semantic versioning:
 ## Publish Dry Run
 
 - Run `npm pack` and inspect archive contents.
+- Prefer the heavier CI proof from `.github/workflows/nightly-release-gate.yml` before a real release window.
 - Validate package includes:
   - `index.ts`
   - `openclaw.plugin.json`

@@ -1,0 +1,33 @@
+name: shellcheck
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/*.sh'
+      - 'scripts/ci/*.sh'
+      - '.github/workflows/shellcheck.yml'
+  pull_request:
+    paths:
+      - 'scripts/*.sh'
+      - 'scripts/ci/*.sh'
+      - '.github/workflows/shellcheck.yml'
+  workflow_dispatch:
+
+jobs:
+  shellcheck:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - openclaw-iota-wallet
+      - hetzner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install ShellCheck
+        run: bash ./scripts/ci/install_shellcheck.sh
+
+      - name: Run ShellCheck
+        run: shellcheck ./scripts/*.sh ./scripts/ci/*.sh

@@ -1,12 +1,12 @@
-name: CI
+name: nightly-release-gate
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  schedule:
+    - cron: '29 3 * * *'
+  workflow_dispatch:
 
 jobs:
-  build-test:
+  release-gate:
     runs-on:
       - self-hosted
       - linux
@@ -26,8 +26,14 @@ jobs:
       - name: Install
         run: npm ci --ignore-scripts
 
-      - name: Typecheck
+      - name: Build
         run: npm run build
 
       - name: Test
         run: npm test
+
+      - name: Pack
+        run: npm pack
+
+      - name: Verify packed plugin archive
+        run: bash ./scripts/ci/pack-artifact-smoke.sh
