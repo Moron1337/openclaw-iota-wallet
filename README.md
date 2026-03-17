@@ -16,8 +16,9 @@ Machine-to-machine wallet layer for the IOTA economy: autonomous bots can hold f
 - Two-phase transfer flow (`prepare -> approve -> execute`).
 - Optional dry-run before broadcast.
 - Signature verification before final send.
-- Strict CLI allowlist (`iota client` and `iota keytool` only).
-- Install bootstrap that sets `mainnet` and auto-creates a first wallet address if missing.
+- SDK-first runtime for reads and local-keystore / external-signature transfer execution.
+- Optional CLI/KMS bridge for `keytool sign-kms`.
+- Install bootstrap that auto-creates a first wallet address if the keystore is empty.
 
 ## Machine Economy Focus
 
@@ -30,22 +31,20 @@ Machine-to-machine wallet layer for the IOTA economy: autonomous bots can hold f
 ## Requirements
 
 - OpenClaw CLI (validated with `2026.2.12`).
-- IOTA CLI (validated with `1.16.2`).
-- Node.js `>=18` for local development.
+- Node.js `>=20`.
+- IOTA CLI only if you need CLI-assisted KMS signing or explicit CLI parity.
 
-## Required IOTA CLI Surface
+## Runtime Modes
 
-The plugin depends on this minimal command set:
+Default runtime:
 
-- `iota client active-env`
-- `iota client balance`
-- `iota client gas`
-- `iota client pay-iota --serialize-unsigned-transaction`
-- `iota client serialized-tx --dry-run`
-- `iota client execute-signed-tx`
-- `iota keytool decode-or-verify-tx`
-- `iota keytool sign`
-- `iota keytool sign-kms` (only for KMS signer mode)
+- reads use the IOTA TypeScript SDK
+- local-keystore signing uses the IOTA TypeScript SDK
+- external-signature mode uses SDK build + verify + execute
+
+Optional CLI-only surface:
+
+- `iota keytool sign-kms` (only for KMS signer mode when no precomputed signature is supplied)
 
 ## Install in OpenClaw
 
@@ -58,8 +57,8 @@ openclaw plugins doctor
 Install behavior:
 
 - `postinstall` checks for `iota` CLI.
-- If `iota` is missing, `postinstall` can auto-install it from official `iotaledger/iota` GitHub releases.
-- Active env is switched to `mainnet`.
+- If `iota` is missing or unusable, the plugin still bootstraps a local SDK keystore.
+- If `iota` is available, `postinstall` also keeps the CLI on `mainnet`.
 - If the keystore has no addresses, a first address is created automatically.
 
 Optional install env vars:
@@ -69,6 +68,7 @@ Optional install env vars:
 - `IOTA_CLI_VERSION=latest` to choose release version for auto-install (default is `latest`).
 - `IOTA_CLI_INSTALL_DIR=/path/bin` to choose install target for auto-install (default `~/.local/bin`).
 - `IOTA_CLI_PATH=/custom/path/iota` to use a custom CLI path.
+- `IOTA_KEYSTORE_PATH=/custom/path/iota.keystore` to override the SDK/local-keystore path.
 
 ## Example Plugin Config
 
@@ -123,7 +123,7 @@ After plugin install, run this flow in OpenClaw:
 5. Execute on-chain:
    - Call `iota_execute_transfer` with `draftId`.
    - Optional:
-     - `signerAddress` for local-keystore signing.
+     - `signerAddress` for local-keystore signing when multiple local keys exist.
      - `signature` for external-signature mode.
 
 ### Example Tool Payloads
@@ -191,7 +191,7 @@ openclaw plugins doctor
 - Side-effect tools are registered as optional.
 - `requireApproval` defaults to `true`.
 - `maxTransferNanos` and `recipientAllowlist` enforce policy limits.
-- Arbitrary shell execution is blocked by command validation.
+- Arbitrary shell execution is blocked; the only remaining CLI bridge is optional `keytool sign-kms`.
 
 ## Project Docs
 

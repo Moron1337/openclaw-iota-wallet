@@ -14,7 +14,7 @@ Build a reusable OpenClaw plugin that exposes IOTA wallet capabilities safely:
 
 - Plugin style: OpenClaw plugin with `openclaw.plugin.json` + `configSchema`.
 - Runtime model: In-process plugin, therefore treated as trusted code.
-- Integration strategy: CLI-first (`iota client`, `iota keytool`) with strict command allowlist.
+- Integration strategy: SDK-first for reads and standard signing, optional CLI bridge only for KMS signing.
 - Security strategy: Optional tools only for side effects + explicit approval workflow.
 - Transaction strategy: two-phase flow (prepare -> approve -> execute) with future offline-sign support.
 
@@ -23,7 +23,8 @@ Build a reusable OpenClaw plugin that exposes IOTA wallet capabilities safely:
 - `openclaw.plugin.json`: plugin id, schema, UI hints.
 - `index.ts`: plugin entry and tool registration.
 - `src/config.ts`: config normalization and defaults.
-- `src/iota-cli.ts`: safe CLI wrapper.
+- `src/iota-cli.ts`: optional CLI wrapper for the remaining KMS bridge.
+- `src/iota-sdk.ts`: SDK runtime, keystore helpers, and transaction execution helpers.
 - `src/errors.ts`: typed plugin error taxonomy.
 - `src/validation.ts`: reusable input validation utilities.
 - `src/draft-store.ts`: persistent transfer draft state.
@@ -49,11 +50,12 @@ Build a reusable OpenClaw plugin that exposes IOTA wallet capabilities safely:
 - [x] Add address and coin-type validation utilities.
 - [x] Add tests for `iota_active_env`, `iota_get_balance`, `iota_get_gas`.
 - [x] Add error taxonomy for CLI/RPC/parse failures.
+- [x] Add SDK runtime fallback so reads do not depend on the CLI.
 
 ### M2 - Real prepare flow
 
 - [x] Replace placeholder transfer draft with real unsigned transaction generation.
-- [x] Implement `iota client ... --serialize-unsigned-transaction` integration.
+- [x] Implement SDK transaction generation for transfer drafts.
 - [x] Parse and store `tx_bytes` + decoded preview for user confirmation.
 - [x] Add policy checks before draft creation (network, recipient, max amount).
 
@@ -66,7 +68,7 @@ Build a reusable OpenClaw plugin that exposes IOTA wallet capabilities safely:
 
 ### M4 - Signer abstraction
 
-- [x] Local keystore signer path (`iota keytool sign`).
+- [x] Local keystore signer path.
 - [x] External signer mode: export unsigned payload and accept signature input.
 - [x] Optional KMS signer integration path (`keytool sign-kms`).
 - [x] Signature verification before broadcast.
@@ -81,7 +83,8 @@ Build a reusable OpenClaw plugin that exposes IOTA wallet capabilities safely:
 ## 5) Security Baseline
 
 - Never allow arbitrary shell or unrestricted commands.
-- Allow only whitelisted `iota` subcommands.
+- Keep the standard runtime independent of a shellable IOTA CLI.
+- Allow only the explicit KMS bridge when CLI execution is required.
 - Keep side-effect tools optional in OpenClaw.
 - Use approval gating for all transfer/sign/execute operations.
 - Enforce transfer ceilings and recipient allowlists.
@@ -118,8 +121,10 @@ openclaw plugins doctor
 - 2026-02-13: M4 completed (local keystore, external signature and KMS signer mode + signature verification).
 - 2026-02-13: M5 mostly completed (CI workflow + release checklist + versioning policy; live install validation open).
 - 2026-02-13: M5 completed install validation on OpenClaw `2026.2.12` with plugin install + enable + `openclaw plugins doctor`.
-- 2026-02-13: Installed IOTA CLI `1.16.2` on OpenClaw VM and validated required subcommands for plugin runtime (`client`/`keytool` paths used by tools).
+- 2026-02-13: Installed IOTA CLI `1.16.2` on OpenClaw VM and validated required subcommands for the original CLI-first runtime.
 - 2026-02-13: Added install-time wallet bootstrap (`postinstall`) to enforce `mainnet` env and auto-create the first wallet address when keystore is empty.
+- 2026-03-17: Replaced the standard runtime with SDK-first reads, SDK local-keystore execution, and SDK external-signature execution so constrained hosts no longer need a working `iota` binary.
+- 2026-03-17: Reduced the remaining CLI dependency to the KMS signer bridge only.
 - 2026-02-13: Test status: `14/14` tests passing (`npm run build && npm test`).
 ## 9) External Source Notes (research basis)
 

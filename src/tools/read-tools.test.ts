@@ -14,11 +14,9 @@ function parseToolJson(result: { content: Array<{ type: string; text: string }> 
 }
 
 describe("registerReadTools", () => {
-  it("registers tools and builds args", async () => {
+  it("registers tools and returns SDK balance data", async () => {
     const tools = new Map<string, ToolDef>();
-    const exec = vi.fn(async (_cfg, args: string[]) => {
-      return { args };
-    });
+    const getBalance = vi.fn(async () => ({ owner: A, balances: [{ coinType: "0x2::iota::IOTA", totalBalance: "42" }] }));
 
     const api = {
       registerTool(tool: unknown) {
@@ -27,7 +25,13 @@ describe("registerReadTools", () => {
       },
     } as any;
 
-    registerReadTools(api, DEFAULT_CONFIG, { exec: exec as any });
+    registerReadTools(api, DEFAULT_CONFIG, {
+      sdk: {
+        getActiveEnv: vi.fn(async () => ({ activeEnv: "mainnet" })),
+        getBalance: getBalance as any,
+        getGas: vi.fn(async () => ({ gasCoins: [] })),
+      },
+    });
 
     const balance = tools.get("iota_get_balance");
     expect(balance).toBeDefined();
@@ -40,11 +44,12 @@ describe("registerReadTools", () => {
 
     const payload = parseToolJson(result) as any;
     expect(payload.ok).toBe(true);
-    expect(exec).toHaveBeenCalledTimes(1);
-    const callArgs = exec.mock.calls[0]?.[1] as string[];
-    expect(callArgs).toContain("--with-coins");
-    expect(callArgs).toContain("--coin-type");
-    expect(callArgs).toContain(A);
+    expect(getBalance).toHaveBeenCalledTimes(1);
+    expect(getBalance).toHaveBeenCalledWith(DEFAULT_CONFIG, {
+      address: A,
+      coinType: "0x2::iota::IOTA",
+      withCoins: true,
+    });
   });
 
   it("returns tool error payload on invalid address", async () => {
@@ -57,7 +62,13 @@ describe("registerReadTools", () => {
       },
     } as any;
 
-    registerReadTools(api, DEFAULT_CONFIG, { exec: vi.fn() as any });
+    registerReadTools(api, DEFAULT_CONFIG, {
+      sdk: {
+        getActiveEnv: vi.fn(async () => ({ activeEnv: "mainnet" })),
+        getBalance: vi.fn() as any,
+        getGas: vi.fn() as any,
+      },
+    });
 
     const gas = tools.get("iota_get_gas")!;
     const result = await gas.execute("1", { address: "bad" });

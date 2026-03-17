@@ -3,7 +3,12 @@ import { randomUUID } from "node:crypto";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { DraftStore } from "../draft-store.js";
 import { IotaPluginError, toToolErrorPayload } from "../errors.js";
-import { buildClientArgsWithNetwork, execIotaCli, parseJsonFromStdout } from "../iota-cli.js";
+import { execIotaCli } from "../iota-cli.js";
+import {
+  dryRunTransferViaSdk,
+  executeTransferViaSdk,
+  prepareTransferViaSdk,
+} from "../iota-sdk.js";
 import { toToolText } from "../tool-output.js";
 import type { IotaWalletConfig, PreparedTransfer } from "../types.js";
 import {
@@ -14,50 +19,13 @@ import {
 } from "../validation.js";
 
 type ExecFn = typeof execIotaCli;
+type SdkTxFns = {
+  prepareTransfer: typeof prepareTransferViaSdk;
+  dryRunTransfer: typeof dryRunTransferViaSdk;
+  executeTransfer: typeof executeTransferViaSdk;
+};
 
 const defaultDraftStore = new DraftStore();
-
-function extractUnsignedTxBytes(rawOutput: string): string {
-  const trimmed = rawOutput.trim();
-  if (!trimmed) {
-    throw new IotaPluginError("cli_parse_error", "unsigned transaction output is empty");
-  }
-
-  // Raw base64 response
-  if (/^[A-Za-z0-9+/=]+$/.test(trimmed)) {
-    return trimmed;
-  }
-
-  // JSON string / object response
-  try {
-    const parsed = parseJsonFromStdout(trimmed);
-    if (typeof parsed === "string" && /^[A-Za-z0-9+/=]+$/.test(parsed)) {
-      return parsed;
-    }
-    if (parsed && typeof parsed === "object") {
-      const rec = parsed as Record<string, unknown>;
-      const candidates = [rec.txBytes, rec.tx_bytes, rec.unsignedTxBytes, rec.unsigned_tx_bytes];
-      for (const candidate of candidates) {
-        if (typeof candidate === "string" && /^[A-Za-z0-9+/=]+$/.test(candidate)) {
-          return candidate;
-        }
-      }
-    }
-  } catch {
-    // fall through to line scan
-  }
-
-  for (const line of trimmed.split("\n")) {
-    const candidate = line.trim();
-    if (/^[A-Za-z0-9+/=]{20,}$/.test(candidate)) {
-      return candidate;
-    }
-  }
-
-  throw new IotaPluginError("cli_parse_error", "could not extract unsigned tx bytes from CLI output", {
-    sample: trimmed.slice(0, 500),
-  });
-}
 
 function findSignature(value: unknown): string | undefined {
   if (!value || typeof value !== "object") {
@@ -92,35 +60,6 @@ function findSignature(value: unknown): string | undefined {
   return undefined;
 }
 
-function isVerificationSuccessful(payload: unknown): boolean {
-  if (!payload || typeof payload !== "object") {
-    return false;
-  }
-
-  const record = payload as Record<string, unknown>;
-  const result = record.result;
-
-  if (result === undefined || result === null) {
-    return false;
-  }
-
-  if (typeof result === "string") {
-    return /^ok$/i.test(result.trim());
-  }
-
-  if (typeof result === "object") {
-    const inner = result as Record<string, unknown>;
-    if ("Err" in inner || "err" in inner || "error" in inner) {
-      return false;
-    }
-    if ("Ok" in inner || "ok" in inner || "success" in inner) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function getDraftOrThrow(store: DraftStore, draftId: string): PreparedTransfer {
   const draft = store.get(draftId);
   if (!draft) {
@@ -138,10 +77,15 @@ function getDraftOrThrow(store: DraftStore, draftId: string): PreparedTransfer {
 export function registerTxTools(
   api: OpenClawPluginApi,
   cfg: IotaWalletConfig,
-  deps?: { exec?: ExecFn; store?: DraftStore },
+  deps?: { exec?: ExecFn; sdk?: Partial<SdkTxFns>; store?: DraftStore },
 ): void {
   const exec = deps?.exec ?? execIotaCli;
   const store = deps?.store ?? defaultDraftStore;
+  const sdk: SdkTxFns = {
+    prepareTransfer: deps?.sdk?.prepareTransfer ?? prepareTransferViaSdk,
+    dryRunTransfer: deps?.sdk?.dryRunTransfer ?? dryRunTransferViaSdk,
+    executeTransfer: deps?.sdk?.executeTransfer ?? executeTransferViaSdk,
+  };
 
   api.registerTool(
     {
@@ -173,30 +117,12 @@ export function registerTxTools(
             throw new IotaPluginError("policy_denied", "recipient is not in recipientAllowlist");
           }
 
-          const prepareArgs = buildClientArgsWithNetwork(cfg, [
-            "client",
-            "pay-iota",
-            "--recipients",
+          const prepared = await sdk.prepareTransfer(cfg, {
             recipient,
-            "--input-coins",
-            ...inputCoins,
-            "--amounts",
-            amountNanos.toString(),
-            "--serialize-unsigned-transaction",
-          ]);
-
-          if (gasBudget !== undefined) {
-            prepareArgs.push("--gas-budget", String(gasBudget));
-          }
-
-          const unsignedOutput = await exec(cfg, prepareArgs, { expectJson: false });
-          const txBytes = extractUnsignedTxBytes(String(unsignedOutput));
-
-          const decodedTx = await exec(
-            cfg,
-            ["keytool", "decode-or-verify-tx", "--tx-bytes", txBytes],
-            { expectJson: true },
-          );
+            amountNanos,
+            inputCoins,
+            gasBudget,
+          });
 
           const now = Date.now();
           const draft: PreparedTransfer = {
@@ -206,8 +132,9 @@ export function registerTxTools(
             createdAt: now,
             expiresAt: now + cfg.approvalTtlSeconds * 1000,
             approved: !cfg.requireApproval,
-            txBytes,
-            decodedTx,
+            txBytes: prepared.txBytes,
+            decodedTx: prepared.decodedTx,
+            signerAddress: prepared.signerAddress,
           };
 
           store.set(draft);
@@ -216,7 +143,7 @@ export function registerTxTools(
             ok: true,
             status: "prepared",
             draft,
-            preview: decodedTx,
+            preview: prepared.decodedTx,
           });
         } catch (err) {
           return toToolText(toToolErrorPayload(err));
@@ -270,13 +197,7 @@ export function registerTxTools(
             throw new IotaPluginError("invalid_input", "draft does not contain txBytes");
           }
 
-          const args = buildClientArgsWithNetwork(cfg, [
-            "client",
-            "serialized-tx",
-            draft.txBytes,
-            "--dry-run",
-          ]);
-          const result = await exec(cfg, args, { expectJson: true });
+          const result = await sdk.dryRunTransfer(cfg, draft.txBytes);
           return toToolText({ ok: true, status: "dry_run", result });
         } catch (err) {
           return toToolText(toToolErrorPayload(err));
@@ -308,10 +229,10 @@ export function registerTxTools(
             throw new IotaPluginError("approval_required", "draft is not approved");
           }
 
-          let signature: string | undefined;
+          let providedSignature: string | undefined;
 
           if (typeof params.signature === "string" && params.signature.trim()) {
-            signature = params.signature.trim();
+            providedSignature = params.signature.trim();
           } else if (cfg.signer.mode === "external-signature") {
             throw new IotaPluginError("invalid_input", "signature is required in external-signature mode");
           } else if (cfg.signer.mode === "kms") {
@@ -331,56 +252,36 @@ export function registerTxTools(
             }
 
             const signResult = await exec(cfg, kmsArgs, { expectJson: true });
-            signature = findSignature(signResult);
-            if (!signature) {
+            providedSignature = findSignature(signResult);
+            if (!providedSignature) {
               throw new IotaPluginError("cli_parse_error", "could not extract signature from keytool sign-kms output");
             }
 
-            draft.signature = signature;
-            store.set(draft);
-          } else {
-            const signerAddress = assertIotaAddress(
-              params.signerAddress ?? draft.signerAddress,
-              "signerAddress",
-            );
-            const signResult = await exec(
-              cfg,
-              ["keytool", "sign", "--address", signerAddress, "--data", draft.txBytes],
-              { expectJson: true },
-            );
-
-            signature = findSignature(signResult);
-            if (!signature) {
-              throw new IotaPluginError("cli_parse_error", "could not extract signature from keytool output");
-            }
-
-            draft.signerAddress = signerAddress;
-            draft.signature = signature;
+            draft.signature = providedSignature;
             store.set(draft);
           }
 
-          const executeArgs = buildClientArgsWithNetwork(cfg, [
-            "client",
-            "execute-signed-tx",
-            "--tx-bytes",
-            draft.txBytes,
-            "--signatures",
-            signature,
-          ]);
+          const signerAddress =
+            params.signerAddress !== undefined && params.signerAddress !== null && params.signerAddress !== ""
+              ? assertIotaAddress(params.signerAddress, "signerAddress")
+              : draft.signerAddress;
 
-          const verifyResult = await exec(
-            cfg,
-            ["keytool", "decode-or-verify-tx", "--tx-bytes", draft.txBytes, "--sig", signature],
-            { expectJson: true },
-          );
-          if (!isVerificationSuccessful(verifyResult)) {
-            throw new IotaPluginError("policy_denied", "signature verification failed", verifyResult);
-          }
+          const executed = await sdk.executeTransfer(cfg, {
+            txBytes: draft.txBytes,
+            signerAddress,
+            signature: providedSignature,
+          });
 
-          const result = await exec(cfg, executeArgs, { expectJson: true });
+          draft.signerAddress = executed.verifyResult.signerAddress;
+          draft.signature = executed.signature;
           store.delete(draftId);
 
-          return toToolText({ ok: true, status: "executed", result, verifyResult });
+          return toToolText({
+            ok: true,
+            status: "executed",
+            result: executed.result,
+            verifyResult: executed.verifyResult,
+          });
         } catch (err) {
           return toToolText(toToolErrorPayload(err));
         }

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { defaultKeystorePath } from "./iota-sdk.js";
 import type { IotaWalletConfig, IotaNetwork, SignerMode } from "./types.js";
 
 const DEFAULT_CLI_PATH = "iota";
@@ -127,7 +128,10 @@ export function resolveIotaWalletConfig(raw: unknown): IotaWalletConfig {
     ),
     signer: {
       mode: signerMode,
-      keystorePath: typeof signer.keystorePath === "string" ? signer.keystorePath.trim() : undefined,
+      keystorePath:
+        typeof signer.keystorePath === "string" && signer.keystorePath.trim()
+          ? signer.keystorePath.trim()
+          : defaultKeystorePath(),
       keyId: typeof signer.keyId === "string" ? signer.keyId.trim() : undefined,
       base64PublicKey:
         typeof signer.base64PublicKey === "string" ? signer.base64PublicKey.trim() : undefined,

@@ -6,9 +6,9 @@ This repository contains the OpenClaw plugin `openclaw-iota-wallet`.
 
 ## Prerequisites
 
-- Node.js `>=18`
+- Node.js `>=20`
 - npm
-- IOTA CLI available as `iota` (or set `IOTA_CLI_PATH`)
+- IOTA CLI only if you need to exercise the KMS signer path (or set `IOTA_CLI_PATH`)
 - OpenClaw CLI for integration tests
 
 ## Local Setup
@@ -21,7 +21,8 @@ npm test
 
 ## Development Rules
 
-- Keep command execution restricted to approved IOTA CLI paths.
+- Keep the SDK-first runtime path working without a local `iota` binary.
+- Keep any CLI bridge restricted to the approved KMS path.
 - Do not log secrets, mnemonics, private keys, or sensitive signer data.
 - Keep side-effect tools optional and approval-gated.
 - Update tests for every behavior change.

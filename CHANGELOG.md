@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 This project follows Semantic Versioning.
 
+## [0.2.0] - 2026-03-17
+
+### Changed
+
+- Switched the standard runtime from CLI-first to SDK-first for reads, local-keystore signing, dry-run, and execute.
+- Reduced the remaining CLI requirement to the optional KMS signer bridge.
+- Added SDK-keystore bootstrap fallback during `postinstall` when the IOTA CLI is missing or unusable.
+- Bumped the documented Node.js baseline to `>=20`.
+
 ## [0.1.2] - 2026-02-13
 
 ### Changed

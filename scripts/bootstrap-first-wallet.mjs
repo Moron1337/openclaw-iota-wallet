@@ -7,17 +7,19 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  renameSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 const LOG_PREFIX = "[openclaw-iota-wallet postinstall]";
 const GITHUB_RELEASES_API = "https://api.github.com/repos/iotaledger/iota/releases";
 const DEFAULT_IOTA_CLI_VERSION = "latest";
 let iotaCliPath = process.env.IOTA_CLI_PATH?.trim() || "iota";
+const DEFAULT_KEYSTORE_PATH = `${homedir()}/.iota/iota_config/iota.keystore`;
 const BOOTSTRAP_FLAG = (process.env.IOTA_WALLET_BOOTSTRAP ?? "").trim().toLowerCase();
 const BOOTSTRAP_ENABLED = !new Set(["0", "false", "off", "no"]).has(BOOTSTRAP_FLAG);
 const AUTO_INSTALL_CLI_FLAG = (process.env.IOTA_WALLET_AUTO_INSTALL_CLI ?? "1").trim().toLowerCase();
@@ -393,6 +395,137 @@ function setMainnetAndAddress(address) {
   runIota([...args, "--json"], { expectJson: true });
 }
 
+function getSdkKeystorePath() {
+  return (process.env.IOTA_KEYSTORE_PATH ?? "").trim() || DEFAULT_KEYSTORE_PATH;
+}
+
+function loadSdkKeystoreDocument(keystorePath) {
+  try {
+    const raw = readFileSync(keystorePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return {
+        version: 1,
+        keys: parsed.map((entry) => ({
+          key: {
+            type: "key_pair",
+            value: entry,
+          },
+        })),
+      };
+    }
+    return {
+      version: typeof parsed?.version === "number" ? parsed.version : 2,
+      keys: Array.isArray(parsed?.keys) ? parsed.keys : [],
+    };
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return { version: 2, keys: [] };
+    }
+    throw error;
+  }
+}
+
+function saveSdkKeystoreDocument(keystorePath, document) {
+  const targetDir = dirname(keystorePath);
+  mkdirSync(targetDir, { recursive: true });
+  const tempFile = `${keystorePath}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(
+    tempFile,
+    JSON.stringify(
+      {
+        version: typeof document?.version === "number" ? document.version : 2,
+        keys: Array.isArray(document?.keys) ? document.keys : [],
+      },
+      null,
+      2,
+    ),
+    { mode: 0o600 },
+  );
+  chmodSync(tempFile, 0o600);
+  renameSync(tempFile, keystorePath);
+}
+
+async function addressFromSecretKey(secretKey) {
+  const [{ decodeIotaPrivateKey }, { Ed25519Keypair }, { Secp256k1Keypair }, { Secp256r1Keypair }] =
+    await Promise.all([
+      import("@iota/iota-sdk/cryptography"),
+      import("@iota/iota-sdk/keypairs/ed25519"),
+      import("@iota/iota-sdk/keypairs/secp256k1"),
+      import("@iota/iota-sdk/keypairs/secp256r1"),
+    ]);
+
+  const decoded = decodeIotaPrivateKey(secretKey);
+  if (decoded.schema === "ED25519") {
+    return Ed25519Keypair.fromSecretKey(secretKey).toIotaAddress().toLowerCase();
+  }
+  if (decoded.schema === "Secp256k1") {
+    return Secp256k1Keypair.fromSecretKey(secretKey).toIotaAddress().toLowerCase();
+  }
+  if (decoded.schema === "Secp256r1") {
+    return Secp256r1Keypair.fromSecretKey(secretKey).toIotaAddress().toLowerCase();
+  }
+  return undefined;
+}
+
+async function getSdkKeystoreEntries(keystorePath) {
+  const document = loadSdkKeystoreDocument(keystorePath);
+  const entries = [];
+
+  for (const rawEntry of document.keys) {
+    const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+    const keyRecord = entry.key && typeof entry.key === "object" ? entry.key : {};
+    const secretKey =
+      typeof keyRecord.value === "string" && keyRecord.value.trim()
+        ? keyRecord.value.trim()
+        : typeof entry.secretKey === "string" && entry.secretKey.trim()
+          ? entry.secretKey.trim()
+          : "";
+
+    if (!secretKey) continue;
+
+    const address =
+      asAddress(entry.address) ??
+      asAddress(entry.iotaAddress) ??
+      asAddress(entry.iota_address) ??
+      (await addressFromSecretKey(secretKey));
+
+    if (!address) continue;
+
+    entries.push({
+      address,
+      alias: typeof entry.alias === "string" ? entry.alias.trim() : "",
+      secretKey,
+    });
+  }
+
+  return entries;
+}
+
+async function bootstrapSdkKeystoreWallet() {
+  const keystorePath = getSdkKeystorePath();
+  const entries = await getSdkKeystoreEntries(keystorePath);
+  if (entries.length > 0) {
+    info(`SDK keystore already initialized (${entries.length} address(es)) at ${keystorePath}.`);
+    return;
+  }
+
+  const { Ed25519Keypair } = await import("@iota/iota-sdk/keypairs/ed25519");
+  const signer = typeof Ed25519Keypair.generate === "function" ? Ed25519Keypair.generate() : new Ed25519Keypair();
+  const alias = `openclaw-mainnet-${new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}`;
+  const document = loadSdkKeystoreDocument(keystorePath);
+  document.keys.push({
+    alias,
+    address: signer.toIotaAddress().toLowerCase(),
+    key: {
+      type: "key_pair",
+      value: signer.getSecretKey(),
+    },
+  });
+  saveSdkKeystoreDocument(keystorePath, document);
+  info(`Created first SDK wallet address: ${signer.toIotaAddress().toLowerCase()} (${keystorePath})`);
+}
+
 async function bootstrapWallet() {
   if (!BOOTSTRAP_ENABLED) {
     info("Skipped bootstrap because IOTA_WALLET_BOOTSTRAP is disabled.");
@@ -401,7 +534,8 @@ async function bootstrapWallet() {
 
   const cliReady = await ensureIotaCliAvailable();
   if (!cliReady) {
-    warn(`IOTA CLI not available at "${iotaCliPath}". Wallet bootstrap skipped.`);
+    warn(`IOTA CLI not available at "${iotaCliPath}". Falling back to SDK keystore bootstrap.`);
+    await bootstrapSdkKeystoreWallet();
     return;
   }
 

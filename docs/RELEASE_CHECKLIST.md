@@ -35,8 +35,10 @@ Use semantic versioning:
   - `openclaw plugins enable openclaw-iota-wallet`
   - `openclaw plugins doctor`
   - Confirm postinstall behavior:
-    - auto-installs IOTA CLI when missing (unless disabled via `IOTA_WALLET_AUTO_INSTALL_CLI=0`)
-    - sets `mainnet` env
+    - bootstraps an SDK keystore even if the IOTA CLI is missing or unusable
+    - only requires IOTA CLI for KMS signer mode or explicit CLI parity checks
+    - optionally auto-installs IOTA CLI when missing (unless disabled via `IOTA_WALLET_AUTO_INSTALL_CLI=0`)
+    - keeps the CLI on `mainnet` when the CLI is available
     - creates first wallet address when keystore is empty
 
 ## Post-release

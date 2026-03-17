@@ -1,6 +1,6 @@
 {
   "name": "openclaw-iota-wallet",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Machine-to-machine wallet plugin for OpenClaw on IOTA: bots can hold funds, pay each other, and trigger smart contracts.",
   "license": "MIT",
   "repository": {
@@ -23,7 +23,7 @@
   "type": "module",
   "main": "index.ts",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
@@ -31,6 +31,7 @@
     "postinstall": "node ./scripts/bootstrap-first-wallet.mjs"
   },
   "dependencies": {
+    "@iota/iota-sdk": "1.10.1",
     "@sinclair/typebox": "^0.34.48"
   },
   "devDependencies": {

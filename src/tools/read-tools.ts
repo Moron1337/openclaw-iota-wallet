@@ -1,28 +1,36 @@
 import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { toToolErrorPayload } from "../errors.js";
-import { buildClientArgsWithNetwork, execIotaCli } from "../iota-cli.js";
+import { getActiveEnvViaSdk, getBalanceViaSdk, getGasViaSdk } from "../iota-sdk.js";
 import { toToolText } from "../tool-output.js";
 import type { IotaWalletConfig } from "../types.js";
 import { assertIotaAddress, assertOptionalCoinType } from "../validation.js";
 
-type ExecFn = typeof execIotaCli;
+type SdkReadFns = {
+  getActiveEnv: typeof getActiveEnvViaSdk;
+  getBalance: typeof getBalanceViaSdk;
+  getGas: typeof getGasViaSdk;
+};
 
 export function registerReadTools(
   api: OpenClawPluginApi,
   cfg: IotaWalletConfig,
-  deps?: { exec?: ExecFn },
+  deps?: { sdk?: Partial<SdkReadFns> },
 ): void {
-  const exec = deps?.exec ?? execIotaCli;
+  const sdk: SdkReadFns = {
+    getActiveEnv: deps?.sdk?.getActiveEnv ?? getActiveEnvViaSdk,
+    getBalance: deps?.sdk?.getBalance ?? getBalanceViaSdk,
+    getGas: deps?.sdk?.getGas ?? getGasViaSdk,
+  };
 
   api.registerTool(
     {
       name: "iota_active_env",
-      description: "Get the active IOTA environment from the local CLI config.",
+      description: "Get the active IOTA environment and RPC endpoint used by the plugin runtime.",
       parameters: Type.Object({}),
       async execute() {
         try {
-          const result = await exec(cfg, ["client", "active-env"], { expectJson: true });
+          const result = await sdk.getActiveEnv(cfg);
           return toToolText({ ok: true, result });
         } catch (err) {
           return toToolText(toToolErrorPayload(err));
@@ -35,7 +43,7 @@ export function registerReadTools(
   api.registerTool(
     {
       name: "iota_get_balance",
-      description: "Read wallet balances using iota client balance.",
+      description: "Read wallet balances using the IOTA SDK RPC client.",
       parameters: Type.Object({
         address: Type.Optional(Type.String()),
         coinType: Type.Optional(Type.String()),
@@ -43,22 +51,16 @@ export function registerReadTools(
       }),
       async execute(_id: string, params: Record<string, unknown>) {
         try {
-          const args = buildClientArgsWithNetwork(cfg, ["client", "balance"]);
-
-          if (params.address !== undefined && params.address !== null && params.address !== "") {
-            args.push(assertIotaAddress(params.address, "address"));
-          }
-
+          const address =
+            params.address !== undefined && params.address !== null && params.address !== ""
+              ? assertIotaAddress(params.address, "address")
+              : undefined;
           const coinType = assertOptionalCoinType(params.coinType);
-          if (coinType) {
-            args.push("--coin-type", coinType);
-          }
-
-          if (params.withCoins === true) {
-            args.push("--with-coins");
-          }
-
-          const result = await exec(cfg, args, { expectJson: true });
+          const result = await sdk.getBalance(cfg, {
+            address,
+            coinType,
+            withCoins: params.withCoins === true,
+          });
           return toToolText({ ok: true, result });
         } catch (err) {
           return toToolText(toToolErrorPayload(err));
@@ -77,11 +79,11 @@ export function registerReadTools(
       }),
       async execute(_id: string, params: Record<string, unknown>) {
         try {
-          const args = buildClientArgsWithNetwork(cfg, ["client", "gas"]);
-          if (params.address !== undefined && params.address !== null && params.address !== "") {
-            args.push(assertIotaAddress(params.address, "address"));
-          }
-          const result = await exec(cfg, args, { expectJson: true });
+          const address =
+            params.address !== undefined && params.address !== null && params.address !== ""
+              ? assertIotaAddress(params.address, "address")
+              : undefined;
+          const result = await sdk.getGas(cfg, { address });
           return toToolText({ ok: true, result });
         } catch (err) {
           return toToolText(toToolErrorPayload(err));

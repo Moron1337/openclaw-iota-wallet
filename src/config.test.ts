@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, resolveIotaWalletConfig } from "./config.js";
+import { defaultKeystorePath } from "./iota-sdk.js";
 
 const A = `0x${"0123456789abcdef".repeat(4)}`;
 const B = `0x${"a".repeat(64)}`;
@@ -10,6 +11,7 @@ describe("resolveIotaWalletConfig", () => {
     expect(cfg.defaultNetwork).toBe(DEFAULT_CONFIG.defaultNetwork);
     expect(cfg.requireApproval).toBe(true);
     expect(cfg.maxTransferNanos).toBe(1_000_000_000n);
+    expect(cfg.signer.keystorePath).toBe(defaultKeystorePath());
   });
 
   it("normalizes and clamps values", () => {

@@ -25,32 +25,20 @@ describe("registerTxTools", () => {
     const store = new DraftStore(path.join(tmp, "drafts.json"));
 
     const tools = new Map<string, ToolDef>();
-
-    const exec = vi.fn(async (_cfg, args: string[], opts?: { expectJson?: boolean }) => {
-      const argStr = args.join(" ");
-      if (argStr.includes("serialize-unsigned-transaction")) {
-        return "QUJDREVGR0hJSg==";
-      }
-      if (argStr.includes("decode-or-verify-tx") && argStr.includes("--sig")) {
-        return { result: { Ok: null } };
-      }
-      if (argStr.includes("decode-or-verify-tx")) {
-        return { decoded: true };
-      }
-      if (argStr.includes("serialized-tx") && argStr.includes("--dry-run")) {
-        return { dryRun: true };
-      }
-      if (argStr.includes("execute-signed-tx")) {
-        return { digest: "0xdeadbeef" };
-      }
-      if (argStr.includes("keytool sign") || argStr.includes(" keytool sign ")) {
-        return { iotaSignature: "AQIDBA==" };
-      }
-      if (opts?.expectJson === true) {
-        return {};
-      }
-      return "";
-    });
+    const sdk = {
+      prepareTransfer: vi.fn(async () => ({
+        txBytes: "QUJDREVGR0hJSg==",
+        decodedTx: { decoded: true },
+        signerAddress: A,
+        rpcUrl: "https://rpc.example",
+      })),
+      dryRunTransfer: vi.fn(async () => ({ dryRun: true })),
+      executeTransfer: vi.fn(async () => ({
+        result: { digest: "0xdeadbeef" },
+        verifyResult: { verified: true, signerAddress: A },
+        signature: "AQIDBA==",
+      })),
+    };
 
     const api = {
       registerTool(tool: unknown) {
@@ -65,7 +53,7 @@ describe("registerTxTools", () => {
         ...DEFAULT_CONFIG,
         signer: { mode: "external-signature" },
       },
-      { exec: exec as any, store },
+      { sdk: sdk as any, store },
     );
 
     const prepare = tools.get("iota_prepare_transfer")!;
@@ -85,6 +73,7 @@ describe("registerTxTools", () => {
     expect(prepareRes.ok).toBe(true);
     expect(prepareRes.status).toBe("prepared");
     expect(prepareRes.draft.txBytes).toBe("QUJDREVGR0hJSg==");
+    expect(prepareRes.draft.signerAddress).toBe(A);
 
     const draftId = prepareRes.draft.id as string;
 
@@ -94,6 +83,7 @@ describe("registerTxTools", () => {
     const dryRunRes = parseToolJson(await dryRun.execute("1", { draftId }));
     expect(dryRunRes.ok).toBe(true);
     expect(dryRunRes.status).toBe("dry_run");
+    expect(sdk.dryRunTransfer).toHaveBeenCalledTimes(1);
 
     const executeRes = parseToolJson(
       await execute.execute("1", {
@@ -105,29 +95,42 @@ describe("registerTxTools", () => {
     expect(executeRes.ok).toBe(true);
     expect(executeRes.status).toBe("executed");
     expect(executeRes.result.digest).toBe("0xdeadbeef");
+    expect(sdk.executeTransfer).toHaveBeenCalledWith(
+      {
+        ...DEFAULT_CONFIG,
+        signer: { mode: "external-signature" },
+      },
+      {
+        txBytes: "QUJDREVGR0hJSg==",
+        signerAddress: A,
+        signature: "AQIDBA==",
+      },
+    );
   });
 
   it("executes with kms signer mode", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "iota-wallet-test-kms-"));
     const store = new DraftStore(path.join(tmp, "drafts.json"));
     const tools = new Map<string, ToolDef>();
+    const sdk = {
+      prepareTransfer: vi.fn(async () => ({
+        txBytes: "QUJDREVGR0hJSg==",
+        decodedTx: { decoded: true },
+        signerAddress: A,
+        rpcUrl: "https://rpc.example",
+      })),
+      dryRunTransfer: vi.fn(async () => ({ dryRun: true })),
+      executeTransfer: vi.fn(async (_cfg, input) => ({
+        result: { digest: "0xbeef" },
+        verifyResult: { verified: true, signerAddress: input.signerAddress ?? A },
+        signature: input.signature ?? "AQIDBA==",
+      })),
+    };
 
     const exec = vi.fn(async (_cfg, args: string[], opts?: { expectJson?: boolean }) => {
       const argStr = args.join(" ");
-      if (argStr.includes("serialize-unsigned-transaction")) {
-        return "QUJDREVGR0hJSg==";
-      }
-      if (argStr.includes("decode-or-verify-tx") && argStr.includes("--sig")) {
-        return { result: { Ok: null } };
-      }
-      if (argStr.includes("decode-or-verify-tx")) {
-        return { decoded: true };
-      }
       if (argStr.includes("sign-kms")) {
         return { serializedSigBase64: "AQIDBA==" };
-      }
-      if (argStr.includes("execute-signed-tx")) {
-        return { digest: "0xbeef" };
       }
       if (opts?.expectJson === true) {
         return {};
@@ -152,7 +155,7 @@ describe("registerTxTools", () => {
           base64PublicKey: "ZmFrZS1rZXk=",
         },
       },
-      { exec: exec as any, store },
+      { exec: exec as any, sdk: sdk as any, store },
     );
 
     const prepare = tools.get("iota_prepare_transfer")!;
@@ -173,5 +176,21 @@ describe("registerTxTools", () => {
     expect(executed.ok).toBe(true);
     expect(executed.status).toBe("executed");
     expect(executed.result.digest).toBe("0xbeef");
+    expect(exec).toHaveBeenCalledTimes(1);
+    expect(sdk.executeTransfer).toHaveBeenCalledWith(
+      {
+        ...DEFAULT_CONFIG,
+        signer: {
+          mode: "kms",
+          keyId: "kms-key-id",
+          base64PublicKey: "ZmFrZS1rZXk=",
+        },
+      },
+      {
+        txBytes: "QUJDREVGR0hJSg==",
+        signerAddress: A,
+        signature: "AQIDBA==",
+      },
+    );
   });
 });

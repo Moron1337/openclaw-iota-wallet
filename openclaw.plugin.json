@@ -2,7 +2,7 @@
   "id": "openclaw-iota-wallet",
   "name": "IOTA Wallet",
   "description": "IOTA wallet tools for OpenClaw machine-to-machine payments with approval-gated transaction flow and smart-contract support.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "skills": ["./skills"],
   "configSchema": {
     "type": "object",
@@ -38,14 +38,14 @@
     }
   },
   "uiHints": {
-    "cliPath": { "label": "IOTA CLI Path", "placeholder": "iota" },
+    "cliPath": { "label": "IOTA CLI Path (optional)", "placeholder": "iota" },
     "defaultNetwork": { "label": "Default Network" },
     "customRpcUrl": { "label": "Custom RPC URL" },
     "requireApproval": { "label": "Require Approval" },
     "approvalTtlSeconds": { "label": "Approval TTL (seconds)", "advanced": true },
     "maxTransferNanos": { "label": "Maximum Transfer (nanos)" },
     "recipientAllowlist": { "label": "Recipient Allowlist" },
-    "commandTimeoutMs": { "label": "CLI Timeout (ms)", "advanced": true },
+    "commandTimeoutMs": { "label": "CLI Timeout (ms, KMS only)", "advanced": true },
     "signer.mode": { "label": "Signer Mode" },
     "signer.keystorePath": { "label": "Keystore Path", "advanced": true, "sensitive": true },
     "signer.keyId": { "label": "KMS Key ID", "advanced": true, "sensitive": true },
