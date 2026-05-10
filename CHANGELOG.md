@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 This project follows Semantic Versioning.
 
+## Unreleased
+
+### Changed
+
+- Refreshed CI/test dependencies while keeping `@iota/iota-sdk` pinned to `1.10.1`.
+
 ## [0.2.0] - 2026-03-17
 
 ### Changed
